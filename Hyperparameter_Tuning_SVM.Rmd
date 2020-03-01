@@ -1,0 +1,251 @@
+---
+title: Multinomial Regression using Hyperparameter Optimization with SVM
+author: "Niharika Sharma"
+date: "September 19, 2019"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+
+
+```{r setup, include=FALSE}
+Sys.setenv(PATH = paste(Sys.getenv("PATH"), "C:\\Users\\NIHA\\AppData\\Local\\Programs\\MikTex 2.9\\miktex\\bin", sep=.Platform$path.sep))
+knitr::opts_chunk$set(echo = FALSE)
+
+#install.packages('tinytex')
+#tinytex::install_tinytex()
+```
+
+
+
+```{r loadpackages, warning=FALSE}
+pacman::p_load(e1071, tidyverse, caret, rmarkdown, corrplot, readxl, ModelMetrics)
+theme_set(theme_classic())
+```
+
+## Defining data
+Certain columns have been deleted due to redundancy issues.
+The List of the deleted columns:
+PriceCH
+PriceMM
+Store7
+ListPriceDiff
+STORE
+
+More crucial attribute than the prices of both these brands is the price difference between both these brands.
+We already have the Store ID in the dataset so STORE and Store7 need not be included in the dataset.
+List Price difference is a redundant attribute as we already have the Sales Price Difference in the data.
+
+Removing such redundant variables in the dataset and keeping more relevant attributes will help us avoid the overfitting of the model.
+
+Creating a Partition for the train and test datasets.
+
+```{r dataload , echo=TRUE}
+juice <- read_csv("juice.csv")
+
+drops <- c("PriceCH", "PriceMM" ,"Store7", "ListPriceDiff",	"STORE")
+juice <- select(juice,-drops)
+
+juice$Purchase <- as.factor(juice$Purchase)
+
+set.seed(123)
+train.index <- createDataPartition(juice$Purchase , p=0.8, list=FALSE)
+juice_train <- juice[train.index,]
+juice_test <- juice[-train.index,]
+```
+
+
+## Linear SVM Model
+```{r LinearSVM, echo=TRUE}
+set.seed(123)
+svm_lnr <- svm(Purchase~., data=juice_train, kernel="linear", cost=0.01)
+summary(svm_lnr)
+
+pred_lnr1 <- predict( svm_lnr, juice_train)
+pred_lnr2 <- predict( svm_lnr, juice_test)
+
+confmatrix_lnr1 <- table(Actual = juice_train$Purchase, Predicted = pred_lnr1)
+confmatrix_lnr1
+
+confmatrix_lnr2 <- table(Actual = juice_test$Purchase, Predicted = pred_lnr2)
+confmatrix_lnr2
+
+```
+Train Accuracy Score - `r sum(diag(confmatrix_lnr1))/sum(confmatrix_lnr1)  ` 
+
+Test Accuracy Score - `r sum(diag(confmatrix_lnr2))/sum(confmatrix_lnr2)  `
+
+Train Error Rate - `r 1-sum(diag(confmatrix_lnr1))/sum(confmatrix_lnr1)  ` 
+
+Test Error Rate - `r 1-sum(diag(confmatrix_lnr2))/sum(confmatrix_lnr2)  `
+
+
+## Grid Search for Linear SVM using tune function
+
+```{r Lnr_SVM_Tune  , echo=TRUE}
+cost_arr=seq(0.01, 10, by=0.1)
+set.seed(123)
+tune_lnr <- tune(svm, Purchase~., data = juice_train, kernel="linear",
+                 ranges = list(cost=cost_arr))
+
+summary(tune_lnr)
+
+plot(tune_lnr)
+
+
+pred_lnr1 <- predict( tune_lnr$best.model, juice_train)
+pred_lnr2 <- predict( tune_lnr$best.model, juice_test)
+
+confmatrix_lnr1 <- table(Actual = juice_train$Purchase, Predicted = pred_lnr1)
+confmatrix_lnr1
+
+confmatrix_lnr2 <- table(Actual = juice_test$Purchase, Predicted = pred_lnr2)
+confmatrix_lnr2
+
+
+```
+
+Train Accuracy Score - `r sum(diag(confmatrix_lnr1))/sum(confmatrix_lnr1)  `
+
+Test Accuracy Score - `r sum(diag(confmatrix_lnr2))/sum(confmatrix_lnr2)  ` 
+
+Train Error Rate - `r 1-sum(diag(confmatrix_lnr1))/sum(confmatrix_lnr1)  ` 
+
+Test Error Rate - `r 1-sum(diag(confmatrix_lnr2))/sum(confmatrix_lnr2)  `
+
+##############################################################################
+
+## RBF Model 
+
+```{r RBF  , echo=TRUE}
+set.seed(123)
+svm_rbf <- svm(Purchase~., data=juice_train, cost=0.01)
+
+summary(svm_rbf)
+
+pred_rbf1 <- predict( svm_rbf, juice_train)
+pred_rbf2 <- predict( svm_rbf, juice_test)
+
+confmatrix_rbf1 <- table(Actual = juice_train$Purchase, Predicted = pred_rbf1)
+confmatrix_rbf1
+
+confmatrix_rbf2 <- table(Actual = juice_test$Purchase, Predicted = pred_rbf2)
+confmatrix_rbf2
+```
+Train Accuracy Score - `r sum(diag(confmatrix_rbf1))/sum(confmatrix_rbf1)  `
+
+Test Accuracy Score - `r sum(diag(confmatrix_rbf2))/sum(confmatrix_rbf2)  ` 
+
+Train Error Rate - `r 1-sum(diag(confmatrix_rbf1))/sum(confmatrix_rbf1)  ` 
+
+Test Error Rate - `r 1-sum(diag(confmatrix_rbf2))/sum(confmatrix_rbf2)  `
+
+## Tuned RBF Model
+
+```{r RBF_SVM_Tune  , echo=TRUE}
+set.seed(123)
+tune_rbf <- tune(svm, Purchase~., data = juice_train,
+                 ranges = list(cost=cost_arr))
+
+summary(tune_rbf)
+
+plot(tune_rbf)
+
+pred_rbf1 <- predict( tune_rbf$best.model, juice_train)
+pred_rbf2 <- predict( tune_rbf$best.model, juice_test)
+
+confmatrix_rbf1 <- table(Actual = juice_train$Purchase, Predicted = pred_rbf1)
+confmatrix_rbf1
+
+confmatrix_rbf2 <- table(Actual = juice_test$Purchase, Predicted = pred_rbf2)
+confmatrix_rbf2
+```
+Train Accuracy Score - `r sum(diag(confmatrix_rbf1))/sum(confmatrix_rbf1)  `
+
+Test Accuracy Score - `r sum(diag(confmatrix_rbf2))/sum(confmatrix_rbf2)  ` 
+
+Train Error Rate - `r 1-sum(diag(confmatrix_rbf1))/sum(confmatrix_rbf1)  ` 
+
+Test Error Rate - `r 1-sum(diag(confmatrix_rbf2))/sum(confmatrix_rbf2)  `
+
+####################################################################
+
+## Polynomial Model
+
+```{r Poly  , echo=TRUE}
+set.seed(123)
+svm_poly <- svm(Purchase~., data=juice_train, kernel ="poly", cost=0.01, degree=2)
+
+summary(svm_poly)
+
+pred_poly1 <- predict(svm_poly, juice_train)
+pred_poly2 <- predict(svm_poly, juice_test)
+
+confmatrix_poly1 <- table(Actual = juice_train$Purchase, Predicted = pred_poly1)
+confmatrix_poly1
+
+confmatrix_poly2 <- table(Actual = juice_test$Purchase, Predicted = pred_poly2)
+confmatrix_poly2
+```
+Train Accuracy Score - `r sum(diag(confmatrix_poly1))/sum(confmatrix_poly1)  `
+
+Test Accuracy Score - `r sum(diag(confmatrix_poly2))/sum(confmatrix_poly2)  ` 
+
+Train Error Rate - `r 1-sum(diag(confmatrix_poly1))/sum(confmatrix_poly1)  ` 
+
+Test Error Rate - `r 1-sum(diag(confmatrix_poly2))/sum(confmatrix_poly2)  `
+
+```{r Poly_SVM_Tune  , echo=TRUE}
+set.seed(123)
+tune_poly <- tune(svm, Purchase~., data = juice_train, kernel="poly", degree=2,
+                 ranges = list(cost=cost_arr))
+
+summary(tune_poly)
+plot(tune_poly)
+
+pred_poly1 <- predict( tune_poly$best.model, juice_train)
+pred_poly2 <- predict( tune_poly$best.model, juice_test)
+
+confmatrix_poly1 <- table(Actual = juice_train$Purchase, Predicted = pred_poly1)
+confmatrix_poly1
+
+confmatrix_poly2 <- table(Actual = juice_test$Purchase, Predicted = pred_poly2)
+confmatrix_poly2
+
+
+```
+
+Train Accuracy Score - `r sum(diag(confmatrix_poly1))/sum(confmatrix_poly1)  ` 
+
+Test Accuracy Score - `r sum(diag(confmatrix_poly2))/sum(confmatrix_poly2)  ` 
+
+Train Error Rate - `r 1-sum(diag(confmatrix_poly1))/sum(confmatrix_poly1)  ` 
+
+Test Error Rate - `r 1-sum(diag(confmatrix_poly2))/sum(confmatrix_poly2)  `
+
+## Conclusion
+
+
+After comparing the Train and Test Scores for all the models:
+
+
+<u>Basic Models</u>
+
+
+SVM with Linear Kernel is the best in case of Basic Models with the least Error scores for both Train and Test datasets.
+
+
+
+
+<u>Tuned Models</u>
+
+
+For both RBF and Linear Kernels, the cost parameter for the best model is 0.31 and the scores are almost equal.
+For Polynomial, the cost parameter is 9.61 but the model isn't as good.  
+
+Taking the Accuracy rate and Error Rate into Consideration, both tuned models - SVM with Kernel RBF and Kernel Linear are good but RBF is slighlty better as there are lower chances of Overfitting.
+
+
+#####################################################################################
